@@ -19,7 +19,6 @@ PORT = "54311"
 Update_delay = 4.0     # Delay between shell.fm refreshes.
 Scroll_delay = 0.5   # speed of artist and title scrolling
 
-
 # Gets info from shell-fm
 def shellfm_info
   # Gets the 'artist', 'title', and 'remaining seconds'
@@ -57,6 +56,10 @@ at_exit {
 
 # initialize Pertelian display.
 $p = Pertelian.new
+# Load in some icons
+Dir.glob(File.join(File.dirname(__FILE__), 'lcd_icons', '*.chr')).each_with_index do |filename, i|
+  $p.load_char_from_file(filename, i+1)
+end
 
 # Display initial splash screen
 splash_screen
@@ -69,6 +72,12 @@ artist, title, album, remain = shellfm_info
 @album  = Widget.new(album,  [2,3], 18)
 @title  = Widget.new(title,  [3,3], 18)
 @remain = Widget.new(remain, [4,3], 7, :time)
+
+# Display icons
+$p.write_char($p.icons["guitar"][:loc], [1,1])
+$p.write_char($p.icons["cd"][:loc],     [2,1])
+$p.write_char($p.icons["notes"][:loc],  [3,1])
+$p.write_char($p.icons["play"][:loc],   [4,1])
 
 # ------------------- Initialize threads -------------------
 
