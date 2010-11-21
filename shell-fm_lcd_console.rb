@@ -7,8 +7,8 @@
 
 require 'rubygems'
 require 'socket'
-require File.join(File.dirname(__FILE__), 'rubyX2040')
-require File.join(File.dirname(__FILE__), 'widget')
+require File.join(File.dirname(__FILE__), 'lib', 'rubyX2040')
+require File.join(File.dirname(__FILE__), 'lib', 'widget')
 
 # shell.fm network interface config
 IP = "localhost"
