@@ -2,3 +2,24 @@
 host: localhost   # (shellfm host)
 port: 54311   # (Port to control shell-fm on.)
 
+alarms:
+  -
+    days_of_week:  # monday is day 1
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+    time: "07:30"
+    station: "globaltags/jazz piano"
+    action: play
+  -
+    days_of_week:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+    time: "08:30"
+    action: pause
+

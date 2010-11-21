@@ -15,6 +15,7 @@ require File.join(File.dirname(__FILE__), 'lib', 'widget')
 config = YAML.load_file(File.join(File.dirname(__FILE__), "config.yml"))
 Host   = config["host"]
 Port   = config["port"]
+Alarms = config["alarms"]
 
 Update_delay = 3.0    # Delay between shell.fm refreshes.
 Scroll_delay = 0.5    # speed of artist and title scrolling
@@ -35,6 +36,16 @@ def shellfm_info
   rescue
     # On error, return false
     return false
+end
+# Sends a cmd to the shellfm network interface.
+def shellfmcmd(cmd)
+  t = TCPSocket.new(Host, Port)
+  t.print cmd + "\n"
+  info = t.gets(nil)
+  t.close
+  return true
+  rescue
+    false
 end
 
 def display_widget(widget)
@@ -167,6 +178,31 @@ scroll_thread = Thread.new {
       widget.increment_scroll
     end
     sleep Scroll_delay
+  end
+}
+
+# Thread for alarms (trigger actions at configured times.)
+alarm_thread = Thread.new {
+  while true
+    time = Time.now
+    Alarms.each do |alarm|
+      if alarm["days_of_week"].include?(t.wday)
+        alarm = DateTime.parse(alarm["time"])
+        if alarm.hour == time.hour && alarm.min == time.min
+          # Alarm matches, trigger action.
+          case alarm["action"]
+          when "play"
+            shellfmcmd("play lastfm://#{alarm["station"]}")
+          when "pause"
+            shellfmcmd("pause")
+          end
+        end
+      end
+    end
+    # Wait until the next minute, then loop.
+    while Time.now.min == time.min
+      sleep 5
+    end
   end
 }
 
