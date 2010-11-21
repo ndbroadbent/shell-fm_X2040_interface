@@ -5,8 +5,6 @@
 # If a string is scrolled, it is padded with 2 spaces to the beginning and end.
 # (easier to read)
 
-
-
 require 'rubygems'
 require 'socket'
 require File.join(File.dirname(__FILE__), 'rubyX2040')
@@ -71,7 +69,9 @@ artist, title, album, remain = shellfm_info
 @artist = Widget.new(artist, [1,3], 18)
 @album  = Widget.new(album,  [2,3], 18)
 @title  = Widget.new(title,  [3,3], 18)
-@remain = Widget.new(remain, [4,3], 7, :time)
+@remain = Widget.new(remain, [4,3], 6, :time)
+
+@key_info = Widget.new("  <next>:n <pause><play>:p <love>:l <stop>:s  ", [4,10], 10, :icons)
 
 # Display icons
 $p.write_char($p.icons["guitar"][:loc], [1,1])
@@ -103,7 +103,7 @@ countdown_remain_thread = Thread.new {
 # Thread to scroll track and artist.
 scroll_thread = Thread.new {
   while true
-    [@artist, @title, @album, @remain].each do |widget|
+    [@artist, @title, @album, @remain, @key_info].each do |widget|
       widget.increment_scroll
     end
     sleep Scroll_delay
@@ -112,7 +112,7 @@ scroll_thread = Thread.new {
 
 # Loop to refresh widgets when needed.
 while true
-  [@artist, @title, @album, @remain].each do |widget|
+  [@artist, @title, @album, @remain, @key_info].each do |widget|
     display_widget(widget) if widget.needs_refresh
   end
   sleep 0.05

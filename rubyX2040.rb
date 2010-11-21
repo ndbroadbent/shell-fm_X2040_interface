@@ -9,7 +9,7 @@ class Pertelian
   def initialize(tty='/dev/ttyUSB0')
     @sp = SerialPort.new tty
 
-    @write_delay = 0.002  # Number of seconds to wait between character bytes.
+    @write_delay = 0.001  # Number of seconds to wait between character bytes.
     @instruction_delay = 0.01  # Number of seconds to wait between instruction bytes.
     @row_width = 20  # Number of characters that will fit on a line.
     @row_offsets = [0x00, 0x40, 0x14, 0x54]  # Offsets for ordering rows correctly.
@@ -24,7 +24,7 @@ class Pertelian
     # Entry mode set; increment cursor direction; do not automatically shift.
     # Cursor/display shift; cursor move.
     # Display On; cursor off; do not blink.
-    "\x38\x06\x10\x0c\x01".split.each do |byte|
+    "\x38\x06\x10\x0C\x01".split('').each do |byte|
       send_instruction(byte)
     end
   end

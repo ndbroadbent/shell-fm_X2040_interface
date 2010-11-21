@@ -45,6 +45,13 @@ class Widget
     string = case @format
     when :time
       format_as_time(@value)
+    when :icons
+      tmp_str = @value
+      $p.icons.each do |name, data|
+        # Replace each '<icon>' tag with the character value for the memory location.
+        tmp_str.gsub!("<#{name}>", (data[:loc] - 1).chr)
+      end
+      tmp_str
     else
       @value
     end
