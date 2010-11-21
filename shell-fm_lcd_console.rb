@@ -65,6 +65,11 @@ def write_static_icons
   $p.write_char($p.icons["notes"][:loc],  [3,1])
 end
 
+# Evo T20 is synced to UTC. HK time is UTC +8
+def hk_time
+  Time.now + 8*60*60
+end
+
 # ----------- at_exit code ---------------------
 
 at_exit {
@@ -101,6 +106,10 @@ splash_screen
 @last_remain = 0
 
 @key_info = Widget.new("  <next>:n <pause><play>:p <love>:l <stop>:s  ", [4,10], 10, :icons)
+
+def main_widgets
+  [@artist_widget, @title_widget, @album_widget, @remain_widget, @key_info, @status_widget]
+end
 
 # Static icons for track info
 write_static_icons
@@ -156,6 +165,7 @@ shellfm_refresh_thread = Thread.new {
 
     # Turn on the backlight if a value has changed.
     if has_changed
+      main_widgets.each {|w| w.needs_refresh = true } # Refresh all of the widgets, just in case.
       @backlight_time_left = BacklightTimeout
     end
 
@@ -186,7 +196,7 @@ alarm_thread = Thread.new {
   # Wait for status to initialize
   sleep Update_delay * 3
   while true
-    time = Time.now
+    time = hk_time
     Alarms.each do |alarm|
       if alarm["days_of_week"].include?(time.wday)
         alarm_time = DateTime.parse(alarm["time"])
@@ -203,12 +213,18 @@ alarm_thread = Thread.new {
             shellfmcmd("volume 100") # Reset volume to 100%
           when "pause"
             shellfmcmd("pause") if @status == :playing
+          when "stop"
+            shellfmcmd("volume 0")
+            # If station is paused, we must unpause it first.
+            shellfmcmd("pause") if @status == :paused
+            shellfmcmd("stop")
+            shellfmcmd("volume 100") # Reset volume to 100%
           end
         end
       end
     end
     # Wait until the next minute, then loop.
-    while Time.now.min == time.min
+    while hk_time.min == time.min
       sleep 5
     end
   end
@@ -222,7 +238,7 @@ while true
       write_static_icons
       @status_cache = @status
     end
-    [@artist_widget, @title_widget, @album_widget, @remain_widget, @key_info, @status_widget].each do |widget|
+    main_widgets.each do |widget|
       display_widget(widget) if widget.needs_refresh
     end
   when :stopped
