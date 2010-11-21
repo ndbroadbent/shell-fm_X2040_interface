@@ -24,7 +24,8 @@ class Pertelian
     # Entry mode set; increment cursor direction; do not automatically shift.
     # Cursor/display shift; cursor move.
     # Display On; cursor off; do not blink.
-    "\x38\x06\x10\x0C\x01".split('').each do |byte|
+    # Backlight On.
+    "\x38\x06\x10\x0C\x01\x03".split('').each do |byte|
       send_instruction(byte)
     end
   end

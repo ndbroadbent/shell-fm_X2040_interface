@@ -14,8 +14,11 @@ require File.join(File.dirname(__FILE__), 'widget')
 IP = "localhost"
 PORT = "54311"
 
-Update_delay = 4.0     # Delay between shell.fm refreshes.
-Scroll_delay = 0.5   # speed of artist and title scrolling
+Update_delay = 3.0    # Delay between shell.fm refreshes.
+Scroll_delay = 0.5    # speed of artist and title scrolling
+
+DisplayUpdateInterval = 0.05  # Poll for refreshes at this interval
+BacklightTimeout      = 20.0  # Turn off the backlight after a delay
 
 # Gets info from shell-fm
 def shellfm_info
@@ -47,12 +50,13 @@ end
 at_exit {
   # When we quit, display a final "bye" message.
   $p.clear
+  $p.backlight false
   $p.message "Bye!".center(20), [2,1]
 }
 
 # -------------- Script Start -------------------
 
-# initialize Pertelian display.
+# initialize DisplayUpdateIntervalPertelian display.
 $p = Pertelian.new
 # Load in some icons
 Dir.glob(File.join(File.dirname(__FILE__), 'lcd_icons', '*.chr')).each_with_index do |filename, i|
@@ -70,51 +74,100 @@ artist, title, album, remain = shellfm_info
 @album  = Widget.new(album,  [2,3], 18)
 @title  = Widget.new(title,  [3,3], 18)
 @remain = Widget.new(remain, [4,3], 6, :time)
+# An icon widget to show the track status
+@status = Widget.new("<play>", [4,1], 1, :icons)
 
 @key_info = Widget.new("  <next>:n <pause><play>:p <love>:l <stop>:s  ", [4,10], 10, :icons)
 
-# Display icons
+# Static icons for track info
 $p.write_char($p.icons["guitar"][:loc], [1,1])
 $p.write_char($p.icons["cd"][:loc],     [2,1])
 $p.write_char($p.icons["notes"][:loc],  [3,1])
-$p.write_char($p.icons["play"][:loc],   [4,1])
 
+# Initialize a variable to detect when the backlight needs to timeout
+@backlight_time_left = BacklightTimeout
+
+# Variables to detect whether or not the stream is paused.
+@playing = false
+@last_remain = 0
 # ------------------- Initialize threads -------------------
 
 # Thread to periodically update our artist/title/remaining time hash and loop.
 shellfm_refresh_thread = Thread.new {
   while true
-    [@artist, @title, @album, @remain].zip(shellfm_info).each do |widget, value|
+    data = shellfm_info
+    has_changed = false
+    [@artist, @title, @album].zip(data[0,3]).each do |widget, value|
       # Reset widget scroll positions if their values have changed.
-      widget.value, widget.scroll_pos = value, 1 if widget.value != value
+      if widget.value != value
+        widget.value, widget.scroll_pos = value, 1
+        has_changed = true
+      end
     end
+    # Set the remaining track time.
+    @remain.value = data[3]
+
+    # Detect whether the stream is paused or not.
+    currently_playing = (data[3].to_i > 0 && @last_remain != data[3])
+    @last_remain = data[3]
+
+    if @playing
+      unless currently_playing
+        @playing = false
+        # Update the status icon to 'paused'
+        @status.value = "<pause>"
+        has_changed = true
+      end
+    else
+      if currently_playing
+        @playing = true
+        @status.value = "<play>"
+        has_changed = true
+      end
+    end
+
+    # Turn on the backlight if a value has changed.
+    if has_changed
+      @backlight_time_left = BacklightTimeout
+    end
+
     sleep Update_delay
   end
 }
 
-# Thread to count down the remaining time between refreshes.
+# Thread to count down the remaining time between refreshes (if stream is playing)
 countdown_remain_thread = Thread.new {
   while true
-    @remain.value = (@remain.value.to_i - 1).to_s
+    @remain.value = (@remain.value.to_i - 1).to_s if @playing
     sleep 1
   end
 }
 
-# Thread to scroll track and artist.
+# Thread to scroll widgets.
 scroll_thread = Thread.new {
   while true
-    [@artist, @title, @album, @remain, @key_info].each do |widget|
+    [@artist, @title, @album, @key_info].each do |widget|
       widget.increment_scroll
     end
     sleep Scroll_delay
   end
 }
 
-# Loop to refresh widgets when needed.
+# Loop to refresh widgets when needed. Also control backlight.
 while true
-  [@artist, @title, @album, @remain, @key_info].each do |widget|
+  [@artist, @title, @album, @remain, @key_info, @status].each do |widget|
     display_widget(widget) if widget.needs_refresh
   end
-  sleep 0.05
+  sleep DisplayUpdateInterval
+  # Also timeout the backlight, if needed
+  if @backlight_time_left > 0
+    # If a thread has just set the backlight timeout, turn it on.
+    $p.backlight true if @backlight_time_left == BacklightTimeout
+    @backlight_time_left -= DisplayUpdateInterval
+    if @backlight_time_left <= 0
+      @backlight_time_left = 0.0
+      $p.backlight false
+    end
+  end
 end
 
