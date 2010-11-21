@@ -28,10 +28,11 @@ def shellfm_info
   t.print cmd + "\n"
   info = t.gets(nil).split("||")
   t.close
-  return info
+
+  return info.any? ? info : false
   rescue
-    # On error, returns blank for everything
-    return [""]*4
+    # On error, return false
+    return false
 end
 
 def display_widget(widget)
@@ -43,6 +44,12 @@ def splash_screen
   $p.message "(c) Nathan Broadbent", [3,1]
   sleep 1
   $p.clear
+end
+
+def write_static_icons
+  $p.write_char($p.icons["guitar"][:loc], [1,1])
+  $p.write_char($p.icons["cd"][:loc],     [2,1])
+  $p.write_char($p.icons["notes"][:loc],  [3,1])
 end
 
 # ----------- at_exit code ---------------------
@@ -66,62 +73,70 @@ end
 # Display initial splash screen
 splash_screen
 
-# Get our first reading from shellfm and initialize artist and title arrays,
-# and write the first data to the lcd.
-# Also set up buffers to keep track of value changes.
-artist, title, album, remain = shellfm_info
-@artist = Widget.new(artist, [1,3], 18)
-@album  = Widget.new(album,  [2,3], 18)
-@title  = Widget.new(title,  [3,3], 18)
-@remain = Widget.new(remain, [4,3], 6, :time)
+# ------------------ Paused / Playing Screen --------------
+
+# Set up widgets.
+@artist_widget = Widget.new("", [1,3], 18)
+@album_widget  = Widget.new("", [2,3], 18)
+@title_widget  = Widget.new("", [3,3], 18)
+@remain_widget = Widget.new("", [4,3], 6, :time)
+# Variables to detect whether or not the stream is paused.
+@status = :playing
+@status_cache = nil  # cache for checking whether the status has changed from previous iteration
 # An icon widget to show the track status
-@status = Widget.new("<play>", [4,1], 1, :icons)
+@status_widget = Widget.new("<play>", [4,1], 1, :icons)
+@last_remain = 0
 
 @key_info = Widget.new("  <next>:n <pause><play>:p <love>:l <stop>:s  ", [4,10], 10, :icons)
 
 # Static icons for track info
-$p.write_char($p.icons["guitar"][:loc], [1,1])
-$p.write_char($p.icons["cd"][:loc],     [2,1])
-$p.write_char($p.icons["notes"][:loc],  [3,1])
+write_static_icons
 
-# Initialize a variable to detect when the backlight needs to timeout
+# Initialize a variable for timing out the backlight.
 @backlight_time_left = BacklightTimeout
 
-# Variables to detect whether or not the stream is paused.
-@playing = false
-@last_remain = 0
+# ------------------- Stopped Screen -----------------------
+
+@stopped_widget = Widget.new("<stop> Stopped.", [2,1], 20, :icons, :center)
+
 # ------------------- Initialize threads -------------------
 
 # Thread to periodically update our artist/title/remaining time hash and loop.
 shellfm_refresh_thread = Thread.new {
   while true
-    data = shellfm_info
     has_changed = false
-    [@artist, @title, @album].zip(data[0,3]).each do |widget, value|
-      # Reset widget scroll positions if their values have changed.
-      if widget.value != value
-        widget.value, widget.scroll_pos = value, 1
-        has_changed = true
+    if data = shellfm_info
+      [@artist_widget, @title_widget, @album_widget].zip(data[0,3]).each do |widget, value|
+        # Reset widget scroll positions if their values have changed.
+        if widget.value != value
+          widget.value, widget.scroll_pos = value, 1
+          has_changed = true
+        end
       end
-    end
-    # Set the remaining track time.
-    @remain.value = data[3]
+      # Set the remaining track time.
+      @remain_widget.value = data[3]
 
-    # Detect whether the stream is paused or not.
-    currently_playing = (data[3].to_i > 0 && @last_remain != data[3])
-    @last_remain = data[3]
-
-    if @playing
-      unless currently_playing
-        @playing = false
-        # Update the status icon to 'paused'
-        @status.value = "<pause>"
-        has_changed = true
+      # Detect whether the stream is paused or not.
+      currently_playing = (data[3].to_i > 0 && @last_remain != data[3])
+      @last_remain = data[3]
+      if @status == :playing
+        unless currently_playing
+          @status = :paused
+          # Update the status icon to 'paused'
+          @status_widget.value = "<pause>"
+          has_changed = true
+        end
+      else
+        if currently_playing
+          @status = :playing
+          @status_widget.value = "<play>"
+          has_changed = true
+        end
       end
-    else
-      if currently_playing
-        @playing = true
-        @status.value = "<play>"
+
+    else  # else, if shellfm_info method returned false or nil, the track is stopped.
+      if @status != :stopped
+        @status = :stopped
         has_changed = true
       end
     end
@@ -138,7 +153,7 @@ shellfm_refresh_thread = Thread.new {
 # Thread to count down the remaining time between refreshes (if stream is playing)
 countdown_remain_thread = Thread.new {
   while true
-    @remain.value = (@remain.value.to_i - 1).to_s if @playing
+    @remain_widget.value = (@remain_widget.value.to_i - 1).to_s if @status == :playing
     sleep 1
   end
 }
@@ -146,7 +161,7 @@ countdown_remain_thread = Thread.new {
 # Thread to scroll widgets.
 scroll_thread = Thread.new {
   while true
-    [@artist, @title, @album, @key_info].each do |widget|
+    [@artist_widget, @title_widget, @album_widget, @key_info].each do |widget|
       widget.increment_scroll
     end
     sleep Scroll_delay
@@ -155,10 +170,23 @@ scroll_thread = Thread.new {
 
 # Loop to refresh widgets when needed. Also control backlight.
 while true
-  [@artist, @title, @album, @remain, @key_info, @status].each do |widget|
-    display_widget(widget) if widget.needs_refresh
+  case @status
+  when :playing, :paused
+    if @status_cache == :stopped # Redraw static icons
+      write_static_icons
+      @status_cache = @status
+    end
+    [@artist_widget, @title_widget, @album_widget, @remain_widget, @key_info, @status_widget].each do |widget|
+      display_widget(widget) if widget.needs_refresh
+    end
+  when :stopped
+    if @status_cache != :stopped
+      $p.clear
+      display_widget(@stopped_widget)
+      @status_cache = @status
+    end
   end
-  sleep DisplayUpdateInterval
+
   # Also timeout the backlight, if needed
   if @backlight_time_left > 0
     # If a thread has just set the backlight timeout, turn it on.
@@ -169,5 +197,7 @@ while true
       $p.backlight false
     end
   end
+
+  sleep DisplayUpdateInterval
 end
 
