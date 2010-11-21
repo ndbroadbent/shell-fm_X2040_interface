@@ -1,0 +1,4 @@
+---
+host: localhost   # (shellfm host)
+port: 54311   # (Port to control shell-fm on.)
+

@@ -7,12 +7,14 @@
 
 require 'rubygems'
 require 'socket'
+require 'yaml'
 require File.join(File.dirname(__FILE__), 'lib', 'rubyX2040')
 require File.join(File.dirname(__FILE__), 'lib', 'widget')
 
-# shell.fm network interface config
-IP = "localhost"
-PORT = "54311"
+# Load config.
+config = YAML.load_file(File.join(File.dirname(__FILE__), "config.yml"))
+Host   = config["host"]
+Port   = config["port"]
 
 Update_delay = 3.0    # Delay between shell.fm refreshes.
 Scroll_delay = 0.5    # speed of artist and title scrolling
@@ -24,7 +26,7 @@ BacklightTimeout      = 20.0  # Turn off the backlight after a delay
 def shellfm_info
   # Gets the 'artist', 'title', and 'remaining seconds'
   cmd = "info %a||%l||%t||%R"
-  t = TCPSocket.new(IP, PORT)
+  t = TCPSocket.new(Host, Port)
   t.print cmd + "\n"
   info = t.gets(nil).split("||")
   t.close
