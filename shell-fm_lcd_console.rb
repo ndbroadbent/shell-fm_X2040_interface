@@ -183,18 +183,26 @@ scroll_thread = Thread.new {
 
 # Thread for alarms (trigger actions at configured times.)
 alarm_thread = Thread.new {
+  # Wait for status to initialize
+  sleep Update_delay * 3
   while true
     time = Time.now
     Alarms.each do |alarm|
-      if alarm["days_of_week"].include?(t.wday)
-        alarm = DateTime.parse(alarm["time"])
-        if alarm.hour == time.hour && alarm.min == time.min
+      if alarm["days_of_week"].include?(time.wday)
+        alarm_time = DateTime.parse(alarm["time"])
+        if alarm_time.hour == time.hour && alarm_time.min == time.min
           # Alarm matches, trigger action.
           case alarm["action"]
           when "play"
+            # Volume 0 (because we may have to unpause for a little while)
+            shellfmcmd("volume 0")
+            # If station is paused, we must unpause it first.
+            shellfmcmd("pause") if @status == :paused
             shellfmcmd("play lastfm://#{alarm["station"]}")
+            shellfmcmd("skip") unless @status == :stopped # skip 'delay' unless status is stopped
+            shellfmcmd("volume 100") # Reset volume to 100%
           when "pause"
-            shellfmcmd("pause")
+            shellfmcmd("pause") if @status == :playing
           end
         end
       end
