@@ -15,7 +15,6 @@ require File.join(File.dirname(__FILE__), 'lib', 'widget')
 config = YAML.load_file(File.join(File.dirname(__FILE__), "config.yml"))
 Host   = config["host"]
 Port   = config["port"]
-Alarms = config["alarms"]
 
 Update_delay = 3.0    # Delay between shell.fm refreshes.
 Scroll_delay = 0.5    # speed of artist and title scrolling
@@ -197,28 +196,32 @@ alarm_thread = Thread.new {
   sleep Update_delay * 3
   while true
     time = hk_time
-    Alarms.each do |alarm|
-      if alarm["days_of_week"].include?(time.wday)
-        alarm_time = DateTime.parse(alarm["time"])
-        if alarm_time.hour == time.hour && alarm_time.min == time.min
-          # Alarm matches, trigger action.
-          case alarm["action"]
-          when "play"
-            # Volume 0 (because we may have to unpause for a little while)
-            shellfmcmd("volume 0")
-            # If station is paused, we must unpause it first.
-            shellfmcmd("pause") if @status == :paused
-            shellfmcmd("play lastfm://#{alarm["station"]}")
-            shellfmcmd("skip") unless @status == :stopped # skip 'delay' unless status is stopped
-            shellfmcmd("volume 100") # Reset volume to 100%
-          when "pause"
-            shellfmcmd("pause") if @status == :playing
-          when "stop"
-            shellfmcmd("volume 0")
-            # If station is paused, we must unpause it first.
-            shellfmcmd("pause") if @status == :paused
-            shellfmcmd("stop")
-            shellfmcmd("volume 100") # Reset volume to 100%
+    # Load the alarms file each minute. This is the easiest way to dynamically configure them
+    # via the shellfm sinatra app.
+    if alarms = YAML.load_file(File.join(File.dirname(__FILE__), "alarms.yml"))
+      alarms.each do |alarm|
+        if alarm["days_of_week"].include?(time.wday)
+          alarm_time = DateTime.parse(alarm["time"])
+          if alarm_time.hour == time.hour && alarm_time.min == time.min
+            # Alarm matches, trigger action.
+            case alarm["action"]
+            when "play"
+              # Volume 0 (because we may have to unpause for a little while)
+              shellfmcmd("volume 0")
+              # If station is paused, we must unpause it first.
+              shellfmcmd("pause") if @status == :paused
+              shellfmcmd("play lastfm://#{alarm["station"]}")
+              shellfmcmd("skip") unless @status == :stopped # skip 'delay' unless status is stopped
+              shellfmcmd("volume 100") # Reset volume to 100%
+            when "pause"
+              shellfmcmd("pause") if @status == :playing
+            when "stop"
+              shellfmcmd("volume 0")
+              # If station is paused, we must unpause it first.
+              shellfmcmd("pause") if @status == :paused
+              shellfmcmd("stop")
+              shellfmcmd("volume 100") # Reset volume to 100%
+            end
           end
         end
       end

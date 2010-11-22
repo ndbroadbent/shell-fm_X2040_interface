@@ -1,0 +1,21 @@
+---
+-
+  time: "07:30"
+  days_of_week:  # monday is day 1
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+  station: "globaltags/jazz piano"
+  action: play
+-
+  time: "08:30"
+  days_of_week:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+  action: pause
+
